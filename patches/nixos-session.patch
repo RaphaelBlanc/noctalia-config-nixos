@@ -1,0 +1,111 @@
+diff --git a/home/.local/bin/nc-paquets b/home/.local/bin/nc-paquets
+index 8535cf0..3f069e5 100755
+--- a/home/.local/bin/nc-paquets
++++ b/home/.local/bin/nc-paquets
+@@ -39,6 +39,8 @@ osr() { sed -n "s/^$1=//p" "$os_release" 2>/dev/null | tail -1 | tr -d "\"'"; }
+ os_id="$(osr ID)"
+ gestionnaire() {
+   local - x g
++  # Un gestionnaire installé dans un environnement de développement ne gère pas NixOS.
++  [ "$os_id" != nixos ] || return 0
+   set -f                                     # ID_LIKE découpé en mots, jamais développé en noms de fichiers (« * »)
+   for x in $os_id $(osr ID_LIKE); do
+     case "$x" in
+diff --git a/install.sh b/install.sh
+index 37c9ec3..cb796be 100755
+--- a/install.sh
++++ b/install.sh
+@@ -232,12 +232,25 @@ if [ -r /etc/os-release ]; then
+ fi
+ FAMILY=other
+ case " $OSID $OSLIKE " in
++  *" nixos "*) FAMILY=nixos ;;
+   *" arch "*) FAMILY=arch ;;
+   *" fedora "*) FAMILY=fedora ;;
+   *" debian "*|*" ubuntu "*) FAMILY=debian ;;
+   *suse*) FAMILY=suse ;;
+ esac
+ 
++# NixOS : les paquets, pilotes et services système viennent du module Nix.
++# Même --oui ne doit pas lancer les étapes impératives dans /etc ou /usr.
++if [ "$FAMILY" = nixos ]; then
++  [ "$MODE" != seulement ] || die "$(t "NixOS : configure les assistants système dans Nix (voir docs/nixos.md)." "NixOS: configure system helpers in Nix (see docs/nixos.md).")"
++  [ "$MODE" != full ] || MODE=nosystem
++  if [ "$MODE" != files ] && [ "$MODE" != restore ]; then
++    for outil in Hyprland noctalia qs python3 jq kitty uwsm sed find cmp awk timeout; do
++      have "$outil" || die "$(t "NixOS : $outil manque. Active d'abord le module de la flake noctalia-config-nixos et reconstruis le système (docs/nixos.md)." "NixOS: $outil is missing. Enable the noctalia-config-nixos flake module and rebuild first (docs/nixos.md).")"
++    done
++  fi
++fi
++
+ # Dépôt Noctalia pour Debian / Ubuntu. La clé (nickh-archive-keyring.gpg, la même que dans le paquet
+ # nickh-archive-keyring.deb) est téléchargée seule en HTTPS ; son empreinte est comparée à celle-ci, en dur, AVANT d'être
+ # copiée dans /usr/share/keyrings : si elle diffère (ou s'il y a une autre clé en plus), l'installation s'arrête net. Le
+@@ -311,6 +324,7 @@ pkg_installed() {
+ }
+ pkg_install() {
+   case "$FAMILY" in
++    nixos) warn "$(t "Paquets à déclarer dans Nix : $* (docs/nixos.md)" "Declare these packages in Nix: $* (docs/nixos.md)")"; return 1 ;;
+     arch) pacman_s "$@" ;;
+     fedora) sudo dnf install -y "$@" ;;
+     # Debian 13 avec backports (Hyprland) : leurs bibliothèques (libxkbcommon…) sont plus récentes que celles de
+@@ -1008,7 +1022,7 @@ GENERIC=(uwsm hypridle xdg-desktop-portal-hyprland xdg-desktop-portal-gtk kitty
+          zsh git curl unzip xdg-utils nerdfont adwaita-fonts noto-fonts breeze quickshell sushi wf-recorder pilotes-va vainfo tesseract tesseract-fra tesseract-eng checkupdates
+          sound-theme-freedesktop enregistreur inotify-tools nm-openvpn secret-tool)   # sound-theme-freedesktop : sons du minuteur et du Pomodoro ; inotify-tools : fin des téléchargements vue sans relevé (île) ; même nom sur les 4 distributions
+ [ "$FAMILY" = suse ] && GENERIC+=(python-curses)
+-if [ "$MODE" != files ]; then
++if [ "$MODE" != files ] && [ "$FAMILY" != nixos ]; then
+   say "$(t "1. Paquets" "1. Packages")"
+   missing=(); missing_opt=(); manual=()
+   # Arch : ces paquets améliorent le bureau mais ne sont pas nécessaires pour qu'il démarre ; ils sont proposés (une
+@@ -1261,6 +1275,9 @@ if have qs && ver_ge "$(qs_ver || true)" 0.3 && bash "$REPO/home/.local/bin/nc-q
+   bash "$REPO/home/.local/bin/nc-qs-capture" ||
+     warn "$(t "Quickshell sans capture ou sans réseau : la vue des fenêtres (Super + A) ou le suivi de la connexion est indisponible ; relance nc-maj et accepte sa recompilation." "Quickshell without capture or networking: the window overview (Super + A) or connection tracking is unavailable; run nc-update again and accept rebuilding it.")"
+   POLICE_ICONES="$HOME/.local/share/fonts/MaterialSymbolsRounded.ttf"
++  if [ "$FAMILY" = nixos ] && have fc-match && fc-match -f '%{family}' 'Material Symbols Rounded' | grep -q 'Material Symbols Rounded'; then
++    POLICE_ICONES="$(fc-match -f '%{file}' 'Material Symbols Rounded')"
++  fi
+   if [ ! -s "$POLICE_ICONES" ] && [ "$MODE" != files ] && have curl; then
+     info "$(t "Icônes de l'île : police Material Symbols Rounded (Google), https://github.com/google/material-design-icons" "Island icons: Material Symbols Rounded font (Google), https://github.com/google/material-design-icons")"
+     if ask "$(t "La télécharger (15 Mo) ?" "Download it (15 MB)?")" o; then
+@@ -1304,9 +1321,19 @@ while IFS= read -r -d '' src; do
+   rel="${src#"$root/"}"
+   dst="$HOME/$rel"
+   # assistant.conf contient la clé privée : aucun modèle du dépôt ne doit remplacer ce fichier personnel.
+-  case "$rel" in .zshrc|.p10k.zsh|.config/nvim/*|.config/nc/assistant.conf) continue ;; esac   # étapes 3 et 3b
++  case "$rel" in
++    .config/nc/assistant.conf) continue ;;
++    .zshrc|.p10k.zsh|.config/nvim/*)
++      [ "$FAMILY" = nixos ] && [ "$MODE" != files ] || continue ;;
++  esac   # ailleurs : étapes 3 et 3b
+   if grep -Iq . "$src" 2>/dev/null; then
+     sed "${SED_ARGS[@]}" "$src" > "$tmp"
++    # Les unités copiées restent modifiables, avec les exécutables du profil système NixOS.
++    if [ "$FAMILY" = nixos ]; then
++      case "$rel" in .config/systemd/user/*)
++        sed -i 's|/usr/bin/|/run/current-system/sw/bin/|g' "$tmp" ;;
++      esac
++    fi
+   else
+     cp "$src" "$tmp"
+   fi
+@@ -1558,6 +1585,7 @@ fi
+ 
+ [ "$MODE" = files ] && { noter_version; say "$(t "Terminé (fichiers seulement)." "Done (files only).")"; info "$(t "Les configs du terminal (zsh) et de Neovim n'ont pas été touchées : relance sans --files-only pour les installer." "The terminal (zsh) and Neovim configs weren't touched: run again without --files-only to install them.")"; info "$(t "Assistant distant facultatif : nc-assistant configurer (URL et clé du serveur)." "Optional remote assistant: nc-assistant configurer (server URL and key).")"; exit 0; }
+ 
++if [ "$FAMILY" != nixos ]; then
+ # ── 3. Terminal : zsh + oh-my-zsh + powerlevel10k ─────────────────────────────
+ say "$(t "3. Terminal : zsh, oh-my-zsh, powerlevel10k (invite sur deux lignes, suggestions, couleurs)" "3. Terminal: zsh, oh-my-zsh, powerlevel10k (two-line prompt, suggestions, colors)")"
+ ZSH_DIR="$HOME/.oh-my-zsh"; ZC="$ZSH_DIR/custom"
+@@ -1800,6 +1828,11 @@ if have npm; then
+   fi
+ fi
+ 
++# Fin des étapes impératives du terminal (non utilisées sur NixOS).
++else
++  info "$(t "NixOS : terminal et Neovim fournis par Nix ; aucun téléchargement de binaire ni changement de shell." "NixOS: terminal and Neovim provided by Nix; no binary download or shell change.")"
++fi
++
+ # ── 4. Services de la session ────────────────────────────────────────────────
+ say "$(t "4. Services de ta session" "4. Your session's services")"
+ # nc-noeud.service (JARVIS pilote ce PC) n'est jamais activé ici : seulement par nc-reglages → Intelligence artificielle
