@@ -31,6 +31,12 @@ Les captures du bureau, de Kitty et de SDDM et les journaux sont dans les sortie
 le README. La CI est configurée pour les conserver comme artefacts lorsqu’elle
 exécute ces tests ; cette validation locale ne prouve pas une exécution distante.
 
+La première exécution GitHub a réussi l’installation et les contrôles du bureau,
+puis expiré en attendant la commande saisie dans Kitty. Le test attend désormais
+le widget de saisie ZLE et le focus de Kitty, et espace les touches de 150 ms
+(au-delà des 100 ms de maintien de touche de QEMU). Le délai d’attente de cette
+commande est limité à 120 s et une capture finale facilite le diagnostic.
+
 ## Limites
 
 La VM utilise le rendu logiciel. Aucun PC physique Intel ou NVIDIA n’a été testé,

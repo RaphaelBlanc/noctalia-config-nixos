@@ -42,6 +42,7 @@
   };
 
   testScript = ''
+    import datetime
     import json
     import shlex
 
@@ -77,13 +78,18 @@
 
         with subtest("terminal et configuration zsh"):
             machine.succeed(user("zsh -ic '(( $+functions[_zsh_highlight] && $+functions[_zsh_autosuggest_start] && $+functions[p10k] ))' > ~/zsh-validation.log 2>&1"))
-            hook = 'autoload -Uz add-zsh-hook\n_nc_vm_ready() { : > "$HOME/zsh-ready"; }\nadd-zsh-hook precmd _nc_vm_ready\n'
+            # precmd runs before the prompt is drawn. Wait for ZLE itself to
+            # accept input, including on the slower shared CI runners.
+            hook = 'autoload -Uz add-zle-hook-widget\n_nc_vm_ready() { : > "$HOME/zsh-ready"; }\nadd-zle-hook-widget line-init _nc_vm_ready\n'
             machine.succeed(user("printf %s " + shlex.quote(hook) + " > ~/.zshrc.perso"))
             terminal = "kitty --class nc-vm-test zsh"
             machine.succeed(user("hyprctl -i 0 eval " + shlex.quote("hl.exec_cmd(" + json.dumps(terminal) + ")")))
-            machine.wait_for_file("/home/testeur/zsh-ready")
-            machine.send_chars("print NC_ZSH_OK > /home/testeur/terminal-ok\n")
-            machine.wait_for_file("/home/testeur/terminal-ok")
+            machine.wait_for_file("/home/testeur/zsh-ready", timeout=120)
+            machine.wait_until_succeeds(user("hyprctl -i 0 -j activewindow | jq -e '.class == \"nc-vm-test\"'"), timeout=60)
+            # QEMU sendkey holds a key for 100 ms by default. Its key releases
+            # must finish before the next key, especially around Shift.
+            machine.send_chars("print NC_ZSH_OK > /home/testeur/terminal-ok\n", delay=datetime.timedelta(milliseconds=150))
+            machine.wait_for_file("/home/testeur/terminal-ok", timeout=120)
             machine.succeed("grep -q NC_ZSH_OK /home/testeur/terminal-ok")
             machine.wait_until_succeeds(user("hyprctl -i 0 -j clients | jq -e 'any(.[]; .class == \"nc-vm-test\")'"))
             machine.screenshot("terminal-kitty")
@@ -108,6 +114,7 @@
             machine.fail("nft list table inet nc_vpn")
             machine.succeed("nft list table inet nc_test_preserve")
     finally:
+        machine.screenshot("etat-final")
         machine.execute("journalctl -b --no-pager > /tmp/journal-vm.log")
         machine.copy_from_machine("/tmp/journal-vm.log")
         machine.execute("test ! -f /home/testeur/installation.log || cp /home/testeur/installation.log /tmp/installation.log")
