@@ -1,0 +1,7 @@
+/result
+/result-*
+__pycache__/
+*.pyc
+
+/vm-tests.log
+/upstream-lock.patch
