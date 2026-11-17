@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# nc-start : Prépare l'environnement Nix en RAM (0 Mo sur AFS) et lance la session Hyprland + Noctalia + Quickshell
+set -euo pipefail
+
+FLAKE_DIR="$(realpath "$HOME/afs/.confs/noctalia-config-nixos")"
+
+echo "==> Vérification de l'environnement Nix en RAM (/tmp/nc-epita-env)..."
+if [ ! -x /tmp/nc-epita-env/bin/Hyprland ] || [ ! -x /tmp/nc-epita-env/bin/tesseract ] || [ ! -d /tmp/nc-zsh-custom ] || [ ! -d /tmp/nc-source ]; then
+  echo "    Construction / récupération depuis le cache Nix (en RAM, 0 Mo sur AFS)..."
+  nix build "path:$FLAKE_DIR#epita-env" -o /tmp/nc-epita-env
+  nix build "path:$FLAKE_DIR#zshCustom" -o /tmp/nc-zsh-custom
+  nix build "path:$FLAKE_DIR#source" -o /tmp/nc-source
+fi
+
+export PATH="/tmp/nc-epita-env/bin:$HOME/.local/bin:$HOME/afs/bin:$PATH"
+export XDG_DATA_DIRS="/tmp/nc-epita-env/share:${XDG_DATA_DIRS:-/run/current-system/sw/share}"
+export ZSH="/tmp/nc-epita-env/share/oh-my-zsh"
+export ZSH_CUSTOM="/tmp/nc-zsh-custom"
+
+# Synchroniser les fichiers en RAM (~/.local, ~/Pictures/Wallpapers, ~/.zshrc, ~/.p10k.zsh) si on vient de changer de PC EPITA
+if [ ! -x "$HOME/.local/bin/nc-shell-msg" ] || [ ! -d "$HOME/Pictures/Wallpapers" ] || [ ! -f "$HOME/.zshrc" ]; then
+  echo "==> Synchronisation des fichiers de session en RAM (/home/$USER)..."
+  mkdir -p "$HOME/.local" "$HOME/Pictures" "$HOME/.local/share/fonts" "$HOME/.local/share/dbus-1/services"
+  cp -rf /tmp/nc-source/home/.local/* "$HOME/.local/"
+  chmod -R u+w "$HOME/.local/bin" "$HOME/.local/share" 2>/dev/null || true
+  chmod +x "$HOME/.local/bin/"* 2>/dev/null || true
+  cp -rn /tmp/nc-source/home/Pictures/* "$HOME/Pictures/" 2>/dev/null || true
+  cp -f /tmp/nc-source/home/.zshrc "$HOME/.zshrc"
+  cp -f /tmp/nc-source/home/.p10k.zsh "$HOME/.p10k.zsh"
+  [ -f "$HOME/.face" ] || cp -f /tmp/nc-source/home/.face "$HOME/.face"
+  chmod u+w "$HOME/.zshrc" "$HOME/.p10k.zsh" "$HOME/.face" 2>/dev/null || true
+fi
+
+# Toujours garantir les droits d'écriture sur les fichiers de config et services D-Bus
+for d in hypr noctalia quickshell nc systemd gtk-3.0 gtk-4.0 qt5ct qt6ct kitty fastfetch uwsm xdg-desktop-portal nvim; do
+  [ -d "$HOME/.config/$d" ] && chmod -R u+w "$HOME/.config/$d" 2>/dev/null || true
+done
+chmod u+w "$HOME/.config/kdeglobals" "$HOME/.zshrc" "$HOME/.p10k.zsh" "$HOME/.face" 2>/dev/null || true
+
+mkdir -p "$HOME/.local/share/dbus-1/services"
+cp -fL /tmp/nc-epita-env/share/dbus-1/services/* "$HOME/.local/share/dbus-1/services/" 2>/dev/null || true
+chmod u+w "$HOME/.local/share/dbus-1/services/"* 2>/dev/null || true
+
+# Clé du presse-papiers Noctalia persistée sur AFS
+if [ -s "$HOME/.config/nc/storage.key" ] && [ ! -s "$HOME/.local/state/noctalia/storage.key" ]; then
+  mkdir -p "$HOME/.local/state/noctalia"
+  cp -a "$HOME/.config/nc/storage.key" "$HOME/.local/state/noctalia/storage.key"
+  chmod 600 "$HOME/.local/state/noctalia/storage.key"
+fi
+
+# Polices en RAM pour fontconfig (et lien direct MaterialSymbolsRounded.ttf attendu par nc-diag)
+mkdir -p "$HOME/.local/share/fonts"
+if [ ! -L "$HOME/.local/share/fonts/nc-nix-fonts" ] || [ ! -e "$HOME/.local/share/fonts/MaterialSymbolsRounded.ttf" ]; then
+  ln -sfn /tmp/nc-epita-env/share/fonts "$HOME/.local/share/fonts/nc-nix-fonts"
+  ln -sfn "/tmp/nc-epita-env/share/fonts/truetype/MaterialSymbolsRounded[FILL,GRAD,opsz,wght].ttf" "$HOME/.local/share/fonts/MaterialSymbolsRounded.ttf"
+  fc-cache -f "$HOME/.local/share/fonts" >/dev/null 2>&1 || true
+fi
+
+# Miniatures du carrousel de fonds d'écran (évite les saccades sur les images 4K/8K)
+if [ -x "$HOME/.local/bin/nc-carousel-thumbs" ] && [ ! -f "$HOME/.cache/nc/carousel/.size" ]; then
+  ("$HOME/.local/bin/nc-carousel-thumbs" >/dev/null 2>&1 &)
+fi
+
+# Wrapper uwsm-app compatible sans service système uwsm
+cat > "$HOME/.local/bin/uwsm-app" << 'EOF'
+#!/usr/bin/env bash
+if systemctl --user is-active --quiet wayland-session@*.target 2>/dev/null; then
+  if [ -x /tmp/nc-epita-env/bin/uwsm-app ]; then
+    exec /tmp/nc-epita-env/bin/uwsm-app "$@"
+  fi
+fi
+while [ $# -gt 0 ]; do
+  case "$1" in --) shift; break ;; -*) shift ;; *) break ;; esac
+done
+exec "$@"
+EOF
+chmod +x "$HOME/.local/bin/uwsm-app"
+
+# Sourcer les variables de session uwsm si présentes (sans set -e car env-hyprland utilise des tests courts [ ... ] && ...)
+set +e
+[ -r "$HOME/.config/uwsm/env" ] && . "$HOME/.config/uwsm/env"
+[ -r "$HOME/.config/uwsm/env-hyprland" ] && . "$HOME/.config/uwsm/env-hyprland"
+set -e
+
+systemctl --user daemon-reload 2>/dev/null || true
+busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig 2>/dev/null || true
+systemctl --user reset-failed 2>/dev/null || true
+systemctl --user start pipewire-pulse.service 2>/dev/null || true
+
+if [ "${1:-}" = "--check" ]; then
+  echo "==> Vérification complète nc-start OK !"
+  exit 0
+fi
+
+# Si lancé depuis un vrai TTY (/dev/tty1..6), désactiver DISPLAY pour forcer le mode DRM/Wayland plein écran natif
+CURRENT_TTY="$(tty 2>/dev/null || true)"
+case "$CURRENT_TTY" in
+  /dev/tty[0-9]*)
+    unset DISPLAY WAYLAND_DISPLAY
+    ;;
+esac
+
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=Hyprland
+
+systemctl --user import-environment PATH XDG_DATA_DIRS ZSH ZSH_CUSTOM XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP || true
+
+cleanup() {
+  echo "==> Arrêt des services Wayland de la session Noctalia..."
+  systemctl --user stop noctalia.service nc-ile.service nc-profile-sync.service nc-pouls.service hypridle.service xdg-desktop-portal-hyprland.service 2>/dev/null || true
+  systemctl --user unset-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE 2>/dev/null || true
+  if [ -S /tmp/.X11-unix/X0 ]; then
+    DISPLAY=:0 XDG_CURRENT_DESKTOP=none+i3 XDG_SESSION_TYPE=x11 systemctl --user import-environment DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+echo "==> Démarrage de Hyprland (Noctalia v5 + Quickshell)..."
+Hyprland "$@"

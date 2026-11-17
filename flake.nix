@@ -1,5 +1,5 @@
 {
-  description = "Adaptateur communautaire NixOS pour noctalia-config";
+  description = "Adaptateur communautaire NixOS pour la configuration de Théo";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     upstream = {
@@ -24,7 +24,7 @@
       p = packagesFor system;
     in {
       default = p.installer;
-      inherit (p) source helpers;
+      inherit (p) source helpers epita-env zshCustom;
     } // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
       vm-test = pkgs.testers.runNixOSTest (import ./tests/desktop.nix {
         noctaliaConfigModule = self.nixosModules.default;

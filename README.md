@@ -1,6 +1,6 @@
 # noctalia-config-nixos
 
-Adaptateur communautaire NixOS pour [noctalia-config](https://github.com/abcdef123456-wq/noctalia-config).
+Adaptateur communautaire NixOS pour [noctalia-config de Théo](https://github.com/abcdef123456-wq/noctalia-config).
 Ce dépôt suit l'amont par une entrée flake verrouillée. Il contient seulement le
 module, les adaptations NixOS et les tests ; les configurations et images restent
 dans le dépôt de leur auteur. Le projet amont ne fournit pas de support officiel NixOS.
@@ -112,7 +112,7 @@ ne choisit aucun disque d'installation, aucun mode EFI/BIOS et n'active pas GRUB
 à ta place. Si un autre gestionnaire de connexion est actif, configure son
 remplacement dans ta configuration système avant d'activer SDDM.
 
-## Suivre le dépôt amont
+## Suivre le dépôt de Théo
 
 `flake.lock` fixe une révision exacte de l'entrée `upstream`, qui suit la branche
 `main` officielle. Il n'y a ni copie de l'historique Git, ni duplication des
@@ -131,7 +131,7 @@ nix build .#vm-test .#boot-test -L --cores 4 --max-jobs 2
 
 La vérification hebdomadaire de CI essaie la dernière révision amont et conserve
 le patch du lock dans ses artefacts. Elle ne fusionne pas automatiquement une
-mise à jour et ne pousse rien sur le dépôt amont. Le mainteneur examine le
+mise à jour et ne pousse rien sur le dépôt de Théo. Le mainteneur examine le
 résultat et publie le nouveau lock.
 
 Sur ta machine, mets à jour l'entrée de cet adaptateur dans la flake système,
@@ -163,12 +163,12 @@ batterie, consommation, Wi-Fi/Bluetooth et veille doivent être vérifiés sur l
 poste concerné. Ses services externes sont inaccessibles et elle n'a ni carte
 son ni Bluetooth ; les avertissements associés ne prouvent pas une panne réelle.
 Hyprland 0.57 peut encore signaler `on_created_empty` dans la configuration
-amont. Le projet amont ne fournit pas de support officiel NixOS.
+amont. Aucun support officiel de NixOS par Théo n'est annoncé ici.
 
 ## Origine et licence
 
-Le bureau, les scripts et les thèmes viennent du projet noctalia-config et des auteurs crédités
-dans [le dépôt amont](https://github.com/abcdef123456-wq/noctalia-config). Les règles
+Le bureau, les scripts et les thèmes viennent de Théo et des auteurs crédités
+dans [son dépôt](https://github.com/abcdef123456-wq/noctalia-config). Les règles
 et comportements des assistants root restent ceux de l'amont ; ce projet adapte
 leur installation. La licence MIT est conservée pour le code ; les éléments
 tiers de l'amont conservent leurs licences respectives.

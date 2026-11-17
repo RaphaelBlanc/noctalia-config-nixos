@@ -1,0 +1,14 @@
+# Chargé automatiquement par les shells de connexion (TTY et session graphique)
+export PATH="/tmp/nc-epita-env/bin:$HOME/afs/bin:$HOME/.local/bin:$PATH"
+export NIXOS_CONFIG="$HOME/nixos-config/configuration.nix"
+
+# Démarrage automatique de noctalia-config (Hyprland Wayland DRM natif) dès la connexion sur un TTY (tty1..tty6)
+if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${NC_NO_AUTOSTART:-}" ]; then
+  case "$(tty 2>/dev/null || true)" in
+    /dev/tty[1-6])
+      if ! pgrep -u "$USER" -x Hyprland >/dev/null 2>&1 && [ -x "$HOME/afs/bin/nc-start" ]; then
+        exec "$HOME/afs/bin/nc-start"
+      fi
+      ;;
+  esac
+fi

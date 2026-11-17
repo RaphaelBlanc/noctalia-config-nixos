@@ -26,6 +26,8 @@ let
     cd $out
     patch --batch --fuzz=0 -p1 < ${../patches/nixos-session.patch}
     python3 ${./adapt-source.py} $out
+    substituteInPlace home/.config/systemd/user/noctalia.service \
+      --replace-fail 'ExecStart=/usr/bin/noctalia' 'ExecStart=/usr/bin/env noctalia'
     cp ${../README.md} README-nixos.md
     cp ${../README.md} docs/nixos.md
     # Les changements de la configuration passent par le lock Nix, jamais par un git pull du Nix store.
@@ -55,4 +57,32 @@ let
       printf '%s\n' ${lib.escapeShellArg (upstream.rev or "unknown")} > "$HOME/.config/nc/version-amont-nix"
     '';
   };
-in { inherit source installer helpers; }
+  zshCustom = pkgs.runCommand "nc-zsh-custom" {} ''
+    mkdir -p $out/themes $out/plugins
+    ln -s ${pkgs.zsh-powerlevel10k}/share/zsh-powerlevel10k $out/themes/powerlevel10k
+    ln -s ${pkgs.zsh-autosuggestions}/share/zsh-autosuggestions $out/plugins/zsh-autosuggestions
+    mkdir -p $out/plugins/zsh-syntax-highlighting
+    ln -s ${pkgs.zsh-syntax-highlighting}/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+      $out/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.plugin.zsh
+    ln -s ${pkgs.zsh-fzf-tab}/share/fzf-tab $out/plugins/fzf-tab
+  '';
+  epita-env = pkgs.buildEnv {
+    name = "nc-epita-env";
+    paths = with pkgs; [
+      installer hyprland noctalia quickshell hypridle uwsm
+      kitty nautilus sushi qt6Packages.qt6ct papirus-icon-theme
+      cava swaybg imagemagick jq grim slurp swappy wl-clipboard wtype zenity
+      brightnessctl libnotify python3 libqalculate playerctl fastfetch bluez glib
+      git gh curl wget unzip zip xdg-utils fontconfig
+      inotify-tools wf-recorder libva-utils tesseract pulseaudio
+      xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
+      sound-theme-freedesktop libsecret
+      neovim ripgrep fd nodejs gcc gnumake tree-sitter gitui
+      fzf zoxide eza bat delta lazygit yazi
+      zsh oh-my-zsh
+      nerd-fonts.caskaydia-cove noto-fonts adwaita-fonts material-symbols
+    ];
+    ignoreCollisions = true;
+    passthru = { inherit zshCustom; ohMyZsh = "${pkgs.oh-my-zsh}/share/oh-my-zsh"; };
+  };
+in { inherit source installer helpers epita-env zshCustom; }
