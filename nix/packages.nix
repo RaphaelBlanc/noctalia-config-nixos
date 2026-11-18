@@ -19,26 +19,23 @@ let
     chmod 755 $out/bin/*
   '';
   source = pkgs.runCommand "noctalia-config-nixos-source" {
-    nativeBuildInputs = [ pkgs.patch pkgs.python3 ];
+    nativeBuildInputs = [ pkgs.python3 ];
   } ''
     cp -r ${upstream} $out
     chmod -R u+w $out
     cd $out
-    patch --batch --fuzz=0 -p1 < ${../patches/nixos-session.patch}
-    python3 ${./adapt-source.py} $out
     cp ${../README.md} README-nixos.md
     cp ${../README.md} docs/nixos.md
-    # Les changements de la configuration passent par le lock Nix, jamais par un git pull du Nix store.
-    cat > home/.local/bin/nc-maj <<'UPDATE'
-    #!/usr/bin/env bash
-    [ "''${1:-}" != verifier ] || exit 0
-    printf '%s\n' 'Bureau géré par NixOS.' \
-      'Dans ta configuration NixOS : nix flake update noctalia-config, puis sudo nixos-rebuild switch --flake .#MACHINE.' \
-      'Ensuite : nc-nixos-install. Consulte README-nixos.md pour les changements amont et le retour arrière.'
-    UPDATE
-    chmod 755 home/.local/bin/nc-maj
-    # Contrats vérifiés à chaque mise à jour amont.
-    ! grep -R '/usr/local/bin/nc-\(energie-root\|limite-charge\|vpn-root\)' home/.local/bin
+    # Contrats amont pour une source sans .git et des assistants dans le profil Nix.
+    printf '%s %s\n' ${lib.escapeShellArg upstream.rev} \
+      "$(date -u -d @${toString upstream.lastModified} +%F)" > VERSION
+    mkdir -p home/.config/nc
+    printf '%s\n' 'NC_ROOT_BIN=/run/current-system/sw/bin' > home/.config/nc/plateforme.conf
+    # Les clients restent identiques à l'amont ; seuls les assistants root ont
+    # leurs interpréteurs, leur PATH et les chemins des règles sudo adaptés.
+    cmp install.sh ${upstream}/install.sh
+    cmp home/.local/bin/nc-maj ${upstream}/home/.local/bin/nc-maj
+    cmp home/.local/bin/nc-paquets ${upstream}/home/.local/bin/nc-paquets
     bash -n install.sh
   '';
   installer = pkgs.writeShellApplication {
@@ -49,7 +46,14 @@ let
       if ! grep -Eq '^ID="?nixos"?$' /etc/os-release; then
         echo "Cet adaptateur est destiné à NixOS." >&2; exit 1
       fi
-      bash ${source}/install.sh "$@"
+      # install.sh conserve les modes des modèles. Le store est en lecture seule :
+      # une copie temporaire permet d'installer des configurations modifiables,
+      # sans changer les fichiers personnels que l'amont décide de conserver.
+      install_source=$(mktemp -d)
+      trap 'rm -rf -- "$install_source"' EXIT
+      cp -R ${source}/. "$install_source/"
+      chmod -R u+w "$install_source"
+      bash "$install_source/install.sh" "$@"
       mkdir -p "$HOME/.config/nc"
       printf '%s\n' ${source} > "$HOME/.config/nc/depot"
       printf '%s\n' ${lib.escapeShellArg (upstream.rev or "unknown")} > "$HOME/.config/nc/version-amont-nix"

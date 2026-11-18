@@ -11,10 +11,14 @@ let
     nvidia-pl = [ "0" "1" "2" "3" ];
     wifi-ps = [ "on" "off" ];
     usb-autosuspend = [ "on" "off" ];
+    eth-pm = [ "on" "off" ];
     audio-ps = [ "on" "off" ];
     kbd = [ "0" "1" "2" "3" ];
+    rapl = [ "jeu-30-45" "jeu-45-65" "normal" ];
+    ventilateurs = [ "max" "auto" ];
+    gpu-frequence = [ "jeu" "normal" ];
   };
-  energy = [ "etat" ] ++ lib.concatLists (lib.mapAttrsToList (k: vs: map (v: "${k} ${v}") vs) values);
+  energy = [ "etat" "puissance" ] ++ lib.concatLists (lib.mapAttrsToList (k: vs: map (v: "${k} ${v}") vs) values);
   commands = lib.concatLists (lib.mapAttrsToList (name: args: map (arg: {
     command = "/run/current-system/sw/bin/${name} ${arg}";
     options = [ "NOPASSWD" ];

@@ -116,10 +116,13 @@ remplacement dans ta configuration système avant d'activer SDDM.
 
 `flake.lock` fixe une révision exacte de l'entrée `upstream`, qui suit la branche
 `main` officielle. Il n'y a ni copie de l'historique Git, ni duplication des
-fonds d'écran ou des configurations dans ce dépôt. Le build applique un petit
-patch d'adaptation dans le Nix store ; l'application sans approximation de ce
-patch est vérifiée à chaque mise à jour. Les chemins des assistants et de leurs
-clients sont adaptés à ce moment-là.
+fonds d'écran ou des configurations dans ce dépôt. L'installateur amont reconnaît
+NixOS directement ; aucun correctif n'est appliqué à `install.sh` ni à
+`nc-paquets`, ni aux clients des assistants ou à `nc-maj`. Le build fournit
+`VERSION` à la racine des sources et installe `~/.config/nc/plateforme.conf` avec
+`NC_ROOT_BIN=/run/current-system/sw/bin`. Les assistants root gardent seulement
+les adaptations de leurs interpréteurs, de leur PATH et des chemins sudo. Les
+données système sont trouvées via `XDG_DATA_DIRS`, fourni par NixOS.
 
 Pour mettre à jour cet adaptateur :
 
@@ -135,8 +138,8 @@ mise à jour et ne pousse rien sur le dépôt amont. Le mainteneur examine le
 résultat et publie le nouveau lock.
 
 Sur ta machine, mets à jour l'entrée de cet adaptateur dans la flake système,
-reconstruis NixOS, puis relance `nc-nixos-install`. `nc-maj` affiche cette marche
-à suivre ; son timer de vérification est silencieux. Le compteur de paquets de
+reconstruis NixOS, puis relance `nc-nixos-install`. `nc-maj` indique que cette installation est mise à jour par le gestionnaire
+du système ; son timer de vérification est silencieux. Le compteur de paquets de
 l'île ne compte pas les générations NixOS. Les mises à jour et retours arrière
 du système restent ceux de NixOS.
 

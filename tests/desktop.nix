@@ -36,7 +36,7 @@
       memorySize = 4096;
       cores = 4;
       diskSize = 8192;
-      qemu.options = [ "-vga none -device virtio-gpu-pci" ];
+      qemu.options = [ "-vga none -device virtio-gpu-pci,xres=1280,yres=720" ];
     };
     system.stateVersion = "26.05";
   };
@@ -64,7 +64,20 @@
             machine.succeed("test -f /home/testeur/.config/nvim/init.lua")
             machine.succeed("grep -q /run/current-system/sw/bin/noctalia /home/testeur/.config/systemd/user/noctalia.service")
             machine.succeed(user("systemctl --user is-enabled noctalia.service nc-ile.service hypridle.service"))
+            # The automatic monitor policy otherwise selects a 5120x2160 mode.
+            monitor = 'hl.monitor({ output = "Virtual-1", mode = "1280x720@60", position = "0x0", scale = 1 })\n'
+            machine.succeed(user("printf %s " + shlex.quote(monitor) + " > ~/.config/hypr/perso.lua"))
             machine.succeed("touch /home/testeur/.nc-vm-ready")
+
+        with subtest("contrats amont de plateforme et de version sans Git"):
+            lookup = '. ~/.local/bin/nc-plateforme-root; for name in nc-energie-root nc-limite-charge nc-vpn-root; do test "$(nc_root_bin "$name")" = "/run/current-system/sw/bin/$name" || exit 1; done'
+            machine.succeed(user("sh -c " + shlex.quote(lookup)))
+            probe = "import pathlib, runpy; root = pathlib.Path.home(); depot = pathlib.Path((root / '.config/nc/depot').read_text().strip()); expected = (depot / 'VERSION').read_text().strip(); assert not (depot / '.git').exists(); diag = runpy.run_path(str(root / '.local/bin/nc-diag')); assert diag['version_ecrite'](str(depot)) == expected; modules = [runpy.run_path(str(root / '.local/bin' / name)) for name in ('nc-energie', 'nc-vpn', 'nc-diag')]; assert all(m['assistant_root']('nc-vpn-root') == '/run/current-system/sw/bin/nc-vpn-root' for m in modules)"
+            machine.succeed(user("python3 -c " + shlex.quote(probe)))
+            machine.succeed(user("NC_LANGUE=fr nc-maj > ~/mise-a-jour.log && grep -q 'gestionnaire du système' ~/mise-a-jour.log"))
+            machine.succeed(user("test -z \"$(nc-maj verifier)\""))
+            data_dirs = '. ~/.local/bin/nc-plateforme-root; XDG_DATA_DIRS=/run/current-system/sw/share; test "$(nc_dossiers_donnees)" = /run/current-system/sw/share; test -f /run/current-system/sw/share/sounds/freedesktop/index.theme'
+            machine.succeed(user("sh -c " + shlex.quote(data_dirs)))
 
         with subtest("session Hyprland et services du bureau"):
             machine.wait_until_succeeds(user("hyprctl -i 0 -j monitors | jq -e 'length > 0'"), timeout=120)
@@ -86,6 +99,9 @@
             machine.succeed(user("hyprctl -i 0 eval " + shlex.quote("hl.exec_cmd(" + json.dumps(terminal) + ")")))
             machine.wait_for_file("/home/testeur/zsh-ready", timeout=120)
             machine.wait_until_succeeds(user("hyprctl -i 0 -j activewindow | jq -e '.class == \"nc-vm-test\"'"), timeout=60)
+            # Guest scheduling under software rendering can delay key releases
+            # beyond the compositor's repeat delay. Test discrete key presses.
+            machine.succeed(user("hyprctl -i 0 eval " + shlex.quote("hl.config({ input = { repeat_rate = 0 } })")))
             # QEMU sendkey holds a key for 100 ms by default. Its key releases
             # must finish before the next key, especially around Shift.
             machine.send_chars("print NC_ZSH_OK > /home/testeur/terminal-ok\n", delay=datetime.timedelta(milliseconds=150))
@@ -113,6 +129,14 @@
             machine.succeed(user("sudo -n /run/current-system/sw/bin/nc-vpn-root desactiver"))
             machine.fail("nft list table inet nc_vpn")
             machine.succeed("nft list table inet nc_test_preserve")
+        with subtest("réinstallation sans écraser les fichiers personnels"):
+            # Simule une configuration personnelle et un lien Home Manager.
+            machine.succeed(user("printf '\\n# NC_PERSONAL_ZSH\\n' >> ~/.zshrc; printf '\\n# NC_PERSONAL_P10K\\n' >> ~/.p10k.zsh"))
+            machine.succeed(user("mv ~/.config/nvim ~/nvim-personnel; ln -s ../nvim-personnel ~/.config/nvim; printf '\\n-- NC_PERSONAL_NVIM\\n' >> ~/nvim-personnel/init.lua"))
+            machine.succeed(user("sha256sum ~/.zshrc ~/.p10k.zsh ~/nvim-personnel/init.lua > ~/personal-before.sha256"))
+            machine.succeed(user("setsid -w nc-nixos-install --oui > ~/reinstallation.log 2>&1"), timeout=240)
+            machine.succeed(user("sha256sum -c ~/personal-before.sha256"))
+            machine.succeed(user("test -L ~/.config/nvim && test \"$(readlink ~/.config/nvim)\" = ../nvim-personnel"))
     finally:
         machine.screenshot("etat-final")
         machine.execute("journalctl -b --no-pager > /tmp/journal-vm.log")
@@ -120,6 +144,8 @@
         machine.execute("test ! -f /home/testeur/installation.log || cp /home/testeur/installation.log /tmp/installation.log")
         machine.execute("test ! -f /home/testeur/hyprland-login.log || cp /home/testeur/hyprland-login.log /tmp/hyprland-login.log")
         machine.copy_from_machine("/tmp/installation.log")
+        machine.execute("cp /home/testeur/reinstallation.log /tmp/reinstallation.log 2>/dev/null || touch /tmp/reinstallation.log")
+        machine.copy_from_machine("/tmp/reinstallation.log")
         machine.execute("test -f /tmp/hyprland-login.log || touch /tmp/hyprland-login.log")
         machine.copy_from_machine("/tmp/hyprland-login.log")
         machine.execute("cp /home/testeur/zsh-validation.log /tmp/zsh-validation.log 2>/dev/null || touch /tmp/zsh-validation.log")

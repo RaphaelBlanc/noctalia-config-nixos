@@ -25,11 +25,11 @@
     "upstream": {
       "flake": false,
       "locked": {
-        "lastModified": 1793827820,
-        "narHash": "sha256-7cPWP+tlxg4SrxrwzPWxWJ+yD0mAByGzfryZGZhgkj4=",
+        "lastModified": 1794964797,
+        "narHash": "sha256-mIb2PVr2E9YCDBxjIn9e6opzEZmPtxPmKZKGYym+TZM=",
         "owner": "abcdef123456-wq",
         "repo": "noctalia-config",
-        "rev": "94e593f4d37863549fac7642ca46d963ba39915d",
+        "rev": "11404ca78b73d8ca5fff37d55878bc94d146e3e7",
         "type": "github"
       },
       "original": {
