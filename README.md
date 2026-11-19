@@ -7,6 +7,10 @@ dans le dépôt de leur auteur. Le projet amont ne fournit pas de support offici
 
 ## Installer
 
+Pour les postes EPITA avec AFS et une installation dans ton compte utilisateur,
+consulte le [guide EPITA](docs/epita.md). Il couvre aussi la réparation d'une
+ancienne installation, le terminal et la persistance des images et réglages.
+
 Il faut NixOS avec les droits nécessaires pour reconstruire le système. Sur une
 machine administrée par ton école, fais intégrer le module par l'administrateur.
 Conserve ta configuration matérielle, tes disques, ton bootloader et ton

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Appelé depuis hyprland.start, après création du socket Wayland.
+set -euo pipefail
+units=(noctalia.service nc-ile.service nc-profile-sync.service nc-pouls.service
+       hypridle.service nc-theme-sync.path nc-theme-sync.timer
+       nc-carousel-thumbs.path nc-maj-verif.timer nc-paquets.timer nc-alertes.timer)
+if [ "${1:-}" = --stop ]; then
+  systemctl --user stop "${units[@]}" xdg-desktop-portal-hyprland.service 2>/dev/null || true
+  systemctl --user stop nc-epita-session.target 2>/dev/null || true
+  systemctl --user unset-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE || true
+  exit 0
+fi
+[ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]
+systemctl --user import-environment PATH XDG_DATA_DIRS ZSH ZSH_CUSTOM \
+  WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP
+dbus-update-activation-environment --systemd WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE \
+  PATH XDG_DATA_DIRS XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP
+systemctl --user daemon-reload
+busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
+systemctl --user reset-failed
+systemctl --user start nc-epita-session.target
+systemctl --user restart "${units[@]}"
+systemctl --user restart nc-theme-sync.service

@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-# nc-zsh : Lance le terminal Zsh configuré (oh-my-zsh + powerlevel10k + outils Nix en RAM)
+# Kitty utilise ce shell, même si le shell de connexion de l'école est bash.
 set -euo pipefail
-
-if [ ! -x /tmp/nc-epita-env/bin/zsh ]; then
-  "$HOME/afs/bin/nc-start" --version >/dev/null 2>&1 || true
+script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+if [ -f "$script_dir/../flake.nix" ]; then
+  NC_FLAKE_DIR="${NC_FLAKE_DIR:-$(realpath "$script_dir/..")}"
+  export NC_FLAKE_DIR
 fi
-
-export PATH="/tmp/nc-epita-env/bin:$HOME/.local/bin:$HOME/afs/bin:$PATH"
-export XDG_DATA_DIRS="/tmp/nc-epita-env/share:${XDG_DATA_DIRS:-/run/current-system/sw/share}"
-export ZSH="/tmp/nc-epita-env/share/oh-my-zsh"
-export ZSH_CUSTOM="/tmp/nc-zsh-custom"
-
-if [ ! -f "$HOME/.zshrc" ] && [ -f /tmp/nc-source/home/.zshrc ]; then
-  cp -f /tmp/nc-source/home/.zshrc "$HOME/.zshrc"
-  cp -f /tmp/nc-source/home/.p10k.zsh "$HOME/.p10k.zsh"
+# shellcheck source=epita/env.sh
+. "${NC_FLAKE_DIR:-$HOME/afs/.confs/noctalia-config-nixos}/epita/env.sh"
+if [ ! -x "$NC_ENV_LINK/bin/zsh" ] || [ ! -f "$HOME/.config/nc/greeting.zsh" ]; then
+  "$NC_FLAKE_DIR/epita/nc-start" --check
 fi
-
-exec /tmp/nc-epita-env/bin/zsh "$@"
+unset FASTFETCH_SHOWN
+exec "$NC_ENV_LINK/bin/zsh" "$@"

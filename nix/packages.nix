@@ -51,7 +51,13 @@ let
       if ! grep -Eq '^ID="?nixos"?$' /etc/os-release; then
         echo "Cet adaptateur est destiné à NixOS." >&2; exit 1
       fi
-      bash ${source}/install.sh "$@"
+      # Les modes du store sont en lecture seule. L'installateur les conserve :
+      # copier une source modifiable pour les thèmes et réglages générés.
+      install_source=$(mktemp -d)
+      trap 'rm -rf -- "$install_source"' EXIT
+      cp -R ${source}/. "$install_source/"
+      chmod -R u+w "$install_source"
+      bash "$install_source/install.sh" "$@"
       mkdir -p "$HOME/.config/nc"
       printf '%s\n' ${source} > "$HOME/.config/nc/depot"
       printf '%s\n' ${lib.escapeShellArg (upstream.rev or "unknown")} > "$HOME/.config/nc/version-amont-nix"
@@ -74,6 +80,8 @@ let
       cava swaybg imagemagick jq grim slurp swappy wl-clipboard wtype zenity
       brightnessctl libnotify python3 libqalculate playerctl fastfetch bluez glib
       git gh curl wget unzip zip xdg-utils fontconfig
+      coreutils diffutils findutils gnused gnugrep gawk procps util-linux
+      iproute2 dbus systemd
       inotify-tools wf-recorder libva-utils tesseract pulseaudio
       xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
       sound-theme-freedesktop libsecret
