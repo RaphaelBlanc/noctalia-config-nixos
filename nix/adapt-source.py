@@ -3,6 +3,35 @@ from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
+# Regrouper les SIGWINCH d'un glisser : redessiner l'accueil depuis ZLE une
+# fois la taille stabilisée, puis réafficher l'invite et le texte en cours.
+greeting = root / "home/.config/nc/greeting.zsh"
+old_resize = r'''function TRAPWINCH() {
+    (( _nc_greet_fresh )) || return 0
+    zle && zle -I
+    if (( _nc_greet_fresh == 1 )); then print -n '\e[H\e[2J\e[3J'; else print -n '\e[H\e[2J'; fi
+    nc-greeting $COLUMNS $LINES
+}'''
+new_resize = r'''zmodload zsh/sched
+typeset -gi _nc_greet_resize_pending=0
+function _nc_greet_resize() {
+    _nc_greet_resize_pending=0
+    (( _nc_greet_fresh )) || return 0
+    zle && zle -I
+    if (( _nc_greet_fresh == 1 )); then print -n '\e[H\e[2J\e[3J'; else print -n '\e[H\e[2J'; fi
+    nc-greeting $COLUMNS $LINES
+    if zle; then zle reset-prompt; fi
+}
+function TRAPWINCH() {
+    (( _nc_greet_fresh && ! _nc_greet_resize_pending )) || return 0
+    _nc_greet_resize_pending=1
+    sched +1 _nc_greet_resize
+}'''
+text = greeting.read_text()
+if old_resize not in text:
+    raise SystemExit("Le contrat de redimensionnement Zsh amont a changé.")
+greeting.write_text(text.replace(old_resize, new_resize, 1))
+
 paths = {
     "/usr/local/bin/nc-energie-root": "/run/current-system/sw/bin/nc-energie-root",
     "/usr/local/bin/nc-limite-charge": "/run/current-system/sw/bin/nc-limite-charge",

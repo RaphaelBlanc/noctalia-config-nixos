@@ -26,6 +26,11 @@
       default = p.installer;
       inherit (p) source helpers epita-env zshCustom;
     } // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+      epita-test = pkgs.testers.runNixOSTest (import ./tests/epita.nix {
+        epitaEnv = p.epita-env;
+        inherit (p) source zshCustom;
+        epitaScripts = ./epita;
+      });
       vm-test = pkgs.testers.runNixOSTest (import ./tests/desktop.nix {
         noctaliaConfigModule = self.nixosModules.default;
         source = p.source;
@@ -57,6 +62,15 @@
         sudoRules = builtins.toJSON machine.config.security.sudo.extraRules;
       } "touch $out";
       source = self.packages.${system}.source;
+      epita-persistence = pkgs.runCommand "nc-epita-persistence-check" {
+        nativeBuildInputs = [ pkgs.python3 pkgs.shellcheck pkgs.zsh ];
+      } ''
+        cd ${self}
+        shellcheck -x epita/nc-start epita/nc-zsh epita/nc-session epita/env.sh
+        python3 ${self}/tests/epita-persistence.py
+        python3 ${self}/tests/epita-terminal.py ${self.packages.${system}.source}/home/.config/nc/greeting.zsh
+        touch $out
+      '';
       installer = self.packages.${system}.default;
       helper-policy = pkgs.runCommand "nc-helper-policy-check" {
         nativeBuildInputs = [ pkgs.python3 ];

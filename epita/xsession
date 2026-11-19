@@ -2,11 +2,12 @@
 # ~/.xsession : Exécuté par SDDM (xsession-wrapper) au démarrage graphique sur les postes EPITA
 # Au lieu de lancer i3, prépare l'environnement Nix en RAM et bascule sur le TTY3 (Wayland/DRM natif)
 
-export PATH="/tmp/nc-epita-env/bin:$HOME/afs/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/afs/bin:$HOME/.local/bin:$PATH"
 
 # 1. Préparer l'environnement Nix en RAM et les binaires ~/.local/bin dès l'ouverture de session
 if [ -x "$HOME/afs/bin/nc-start" ]; then
-  "$HOME/afs/bin/nc-start" --check >/tmp/nc-xsession-prep.log 2>&1 || true
+  mkdir -p "$HOME/.cache/nc-epita"
+  "$HOME/afs/bin/nc-start" --check >"$HOME/.cache/nc-epita/xsession.log" 2>&1 || exec i3
 fi
 
 # 2. Si l'utilisateur demande explicitement i3 en secours (NC_FALLBACK_I3=1)
@@ -14,7 +15,7 @@ if [ "${NC_FALLBACK_I3:-0}" = "1" ]; then
   exec i3
 fi
 
-# 3. Basculer automatiquement sur tty3 pour la session Hyprland Wayland DRM native (100 Hz, accélération GPU complète)
+# 3. Demander tty3 ; l'utilisateur doit encore s'y connecter.
 busctl call org.freedesktop.login1 /org/freedesktop/login1/seat/seat0 org.freedesktop.login1.Seat SwitchTo u 3 >/dev/null 2>&1 || true
 
 # Garder la session SDDM en veille propre tant qu'elle n'est pas fermée

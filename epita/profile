@@ -1,6 +1,5 @@
 # Chargé automatiquement par les shells de connexion (TTY et session graphique)
-export PATH="/tmp/nc-epita-env/bin:$HOME/afs/bin:$HOME/.local/bin:$PATH"
-export NIXOS_CONFIG="$HOME/nixos-config/configuration.nix"
+export PATH="$HOME/afs/bin:$HOME/.local/bin:$PATH"
 
 # Démarrage automatique de noctalia-config (Hyprland Wayland DRM natif) dès la connexion sur un TTY (tty1..tty6)
 if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${NC_NO_AUTOSTART:-}" ]; then

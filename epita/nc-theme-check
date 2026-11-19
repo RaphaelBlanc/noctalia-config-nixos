@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Compléter inotify sur AFS sans régénérer les icônes à chaque interrogation."""
+import hashlib
+import os
+from pathlib import Path
+import subprocess
+
+
+def main():
+    home = Path.home()
+    inputs = [home / name for name in (
+        ".config/noctalia/colors.json", ".local/share/color-schemes/noctalia.colors",
+        ".config/nc/style.conf", ".config/noctalia/palettes/Apple.json",
+        ".local/bin/nc-theme-sync",
+    )]
+    digest = hashlib.sha256()
+    for path in inputs:
+        digest.update(str(path).encode())
+        try:
+            digest.update(path.read_bytes())
+        except FileNotFoundError:
+            digest.update(b"missing")
+    expected = digest.hexdigest()
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/tmp/nc-epita-{os.getuid()}")) / "nc-epita"
+    runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
+    marker = runtime / "theme-fingerprint"
+    outputs = [home / name for name in (
+        ".config/kitty/themes/noctalia-dynamic.conf", ".config/hypr/nc/couleurs.lua",
+        ".config/nc/palette-ile.json",
+    )]
+    if marker.exists() and marker.read_text() == expected and all(p.exists() for p in outputs):
+        return
+    subprocess.run([str(home / ".local/bin/nc-theme-sync")], check=True)
+    marker.write_text(expected)
+
+
+if __name__ == "__main__":
+    main()
